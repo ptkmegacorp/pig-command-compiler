@@ -1,0 +1,42 @@
+{
+  "name": "pig-command-compiler",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Pig extension for compiling fuzzy user input into typed, validated, deterministic commands",
+  "keywords": [
+    "pig",
+    "pi-extension",
+    "command-compiler",
+    "command-ir",
+    "extractors",
+    "skills",
+    "deterministic-actions"
+  ],
+  "license": "MIT",
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit",
+    "test": "npm run build && PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/compiler-smoke.mjs",
+    "test:embedding": "npm run build && node tests/embedding-smoke.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts"
+}
