@@ -29,4 +29,7 @@ const missing = await compileInput("show last screenshot", { ...resources, state
 assert.equal(missing.mode, "normal");
 assert.match(missing.reason, /recent_screenshot_path/);
 
+const casual = await compileInput("whats going on", resources);
+assert.equal(casual.mode, "normal");
+
 console.log("compiler smoke tests passed");

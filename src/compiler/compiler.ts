@@ -7,7 +7,7 @@ import { checkPreconditions } from "./preconditions.js";
 import { resolveCommand } from "./resolve.js";
 import { typecheckCommand } from "./typecheck.js";
 import { addTrace, createTrace, type CompilerTrace } from "./trace.js";
-import { DEFAULT_EXTRACTOR_STACK, runExtractorStack, type CommandExtractor } from "./extractors.js";
+import { DEFAULT_EXTRACTOR_STACK, runExtractorStack, type CandidateEvidence, type CommandExtractor, type CommandIRCandidate } from "./extractors.js";
 import { validateDirectExecAction } from "../runtime/safety.js";
 
 export interface CompilerResources {
@@ -40,6 +40,36 @@ function normal(trace: CompilerTrace, reason: string, command: CommandIR | null 
   return { handled: false, mode: "normal", command, directExec: null, skill: null, confidence: command?.confidence ?? 0, reason, trace };
 }
 
+function evidenceIsSufficient(candidate: CommandIRCandidate): { ok: boolean; reason: string; evidence?: CandidateEvidence } {
+  if (candidate.extractor === "rules") return { ok: true, reason: "rules evidence accepted", evidence: candidate.evidence };
+
+  const evidence = candidate.evidence;
+  if (!evidence) {
+    return candidate.ir.confidence >= 0.9
+      ? { ok: true, reason: "high-confidence candidate without structured evidence" }
+      : { ok: false, reason: "candidate lacks structured evidence" };
+  }
+
+  if (evidence.kind === "metadata") {
+    if (evidence.exactExample) return { ok: true, reason: "metadata exact example evidence", evidence };
+    if (evidence.exactKeywordPhrase) return { ok: true, reason: "metadata exact keyword phrase evidence", evidence };
+    if (evidence.anchorMatches?.length && evidence.actionCueMatches?.length && evidence.score >= 0.62) {
+      return { ok: true, reason: "metadata anchor plus action-cue evidence", evidence };
+    }
+    return { ok: false, reason: "metadata evidence lacks exact phrase or anchor+action cue", evidence };
+  }
+
+  if (evidence.kind === "semantic") {
+    if (evidence.score < 0.58) return { ok: false, reason: "semantic evidence below threshold", evidence };
+    if ((evidence.tokenMatches?.length ?? 0) < 2) {
+      return { ok: false, reason: "semantic evidence too short to disambiguate", evidence };
+    }
+    return { ok: true, reason: "semantic evidence accepted", evidence };
+  }
+
+  return { ok: true, reason: "candidate evidence accepted", evidence };
+}
+
 export async function compileInput(
   text: string,
   resources: CompilerResources,
@@ -57,6 +87,10 @@ export async function compileInput(
 
   const command = selected.ir;
   addTrace(trace, "select", true, selected.reason, selected);
+
+  const evidence = evidenceIsSufficient(selected);
+  addTrace(trace, "evidence", evidence.ok, evidence.reason, evidence.evidence);
+  if (!evidence.ok) return normal(trace, evidence.reason, command);
 
   const typecheck = typecheckCommand(command);
   addTrace(trace, "typecheck", typecheck.ok, typecheck.reason);

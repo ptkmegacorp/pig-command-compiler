@@ -4,11 +4,24 @@ import { rulesExtractor } from "./rulesExtractor.js";
 import { bm25Extractor } from "./bm25Extractor.js";
 import { transformersEmbeddingExtractor } from "./transformersEmbeddingExtractor.js";
 
+export interface CandidateEvidence {
+  kind: "rules" | "metadata" | "semantic";
+  score: number;
+  exactExample?: boolean;
+  exactKeywordPhrase?: boolean;
+  matchedExamples?: string[];
+  matchedKeywords?: string[];
+  anchorMatches?: string[];
+  actionCueMatches?: string[];
+  tokenMatches?: string[];
+}
+
 export interface CommandIRCandidate {
   ir: AnyIR;
   extractor: string;
   matchedTerms: string[];
   reason: string;
+  evidence?: CandidateEvidence;
 }
 
 export interface CommandExtractor {

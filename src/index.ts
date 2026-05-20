@@ -1,22 +1,17 @@
 import { compileInput, shouldCompile } from "./compiler/compiler.js";
 import { registerDiagnostics } from "./diagnostics/commands.js";
-import { buildCompilerResources, discoverSkillPaths } from "./runtime/resources.js";
+import { buildCompilerResources } from "./runtime/resources.js";
 import { runDirectExec } from "./runtime/directExec.js";
 import { buildResultMessage, buildSkillMessage } from "./runtime/skillMessages.js";
 import { appendImagePath, type PigImageAttachment } from "./runtime/images.js";
 
 interface MinimalExtensionAPI {
-  on(event: "resources_discover", handler: (event: { cwd?: string }) => unknown): void;
   on(event: "input", handler: (event: { text: string; images?: PigImageAttachment[]; source?: string }, ctx: { cwd?: string }) => unknown | Promise<unknown>): void;
   on(event: string, handler: (...args: unknown[]) => unknown): void;
   registerCommand?: (name: string, options: { description?: string; handler: (args: string, ctx: unknown) => unknown }) => void;
 }
 
 export default function pigCommandCompiler(pi: MinimalExtensionAPI) {
-  pi.on("resources_discover", (event) => ({
-    skillPaths: discoverSkillPaths(event.cwd ?? process.cwd()),
-  }));
-
   pi.on("input", async (event, ctx) => {
     const text = event.text.trim();
     if (event.source === "extension" || !shouldCompile(text)) {

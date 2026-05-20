@@ -113,6 +113,7 @@ export const transformersEmbeddingExtractor: CommandExtractor = {
           extractor: "transformers-embedding",
           matchedTerms: doc.terms.slice(0, 5),
           reason: `semantic match ${doc.id} score=${score.toFixed(3)}`,
+          evidence: { kind: "semantic", score, tokenMatches: text.toLowerCase().match(/[a-z0-9']+/g) ?? [] },
         }));
     } catch (error) {
       if (!warned) {
