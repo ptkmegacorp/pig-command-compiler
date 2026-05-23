@@ -24,6 +24,7 @@ Implemented:
 - typecheck, resolve, lower, preconditions, safety checks
 - direct execution runner for approved skill scripts
 - `/compiler-route <text>` diagnostics command
+- persistent JSONL debug log at `~/.pig/agent/logs/pig-command-compiler.jsonl`
 - smoke tests
 
 Initial target commands:
@@ -64,6 +65,27 @@ export TRANSFORMERS_CACHE=$HOME/.cache/pig-command-compiler/transformers
 ```
 
 Pi can also load the TypeScript extension directly via the package `pi.extensions` entry or with `pi -e ./src/index.ts`.
+
+## Debugging
+
+See [`docs/debugging.md`](docs/debugging.md).
+
+Quick commands:
+
+```text
+/compiler-debug-info
+/compiler-route <text>
+```
+
+These commands put PCC debug details in Pig's footer/status area and JSONL log. `/compiler-route <text>` also sends `<text>` through the normal turn path; footer debug is not included in the model-visible prompt.
+
+Canonical compiler runtime log:
+
+```text
+~/.pig/agent/logs/pig-command-compiler.jsonl
+```
+
+Pig conversation/session history is under `~/.pig/agent/sessions/`, but TUI stderr/stdout may not be persisted there.
 
 ## Safety policy
 

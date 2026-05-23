@@ -1,0 +1,8 @@
+{
+  "name": "npm_check",
+  "cmd": "npm run check",
+  "cwd": "/home/bot/projects/pig-command-compiler",
+  "returncode": 0,
+  "stdout": "\n> pig-command-compiler@0.1.0 check\n> tsc --noEmit\n\n",
+  "stderr": ""
+}

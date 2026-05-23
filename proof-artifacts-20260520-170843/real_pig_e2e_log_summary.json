@@ -1,0 +1,8 @@
+{
+  "name": "real_pig_e2e_log_summary",
+  "cmd": "python3 - <<'PY2'\nimport json\nfrom pathlib import Path\np=Path('/tmp/pcc-proof-pig-log-xterm/pig-command-compiler.jsonl')\nprint('log path', p)\nprint('exists', p.exists())\nfor line in p.read_text().splitlines():\n    o=json.loads(line)\n    print(o.get('ts'), o.get('event'), o.get('input'), (o.get('data') or {}).get('mode') or (o.get('data') or {}).get('reason') or (o.get('data') or {}).get('action'))\nPY2",
+  "cwd": "/home/bot/projects/pig-command-compiler",
+  "returncode": 0,
+  "stdout": "log path /tmp/pcc-proof-pig-log-xterm/pig-command-compiler.jsonl\nexists True\n2026-05-20T22:05:22.037Z compiler_debug_info None None\n2026-05-20T22:05:24.384Z compiler_route weather today direct_exec\n2026-05-20T22:05:28.581Z input_decision weather today direct_exec\n2026-05-20T22:05:29.714Z direct_exec_result weather today weather.brief\n",
+  "stderr": ""
+}

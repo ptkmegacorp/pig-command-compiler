@@ -3,6 +3,7 @@ import path from "node:path";
 import type { CommandExtractor, CommandIRCandidate } from "./extractors.js";
 import { buildMetadataDocs } from "../metadata/loadSkillMetadata.js";
 import type { MetadataDoc } from "../metadata/schema.js";
+import { appendDebugLogSyncBestEffort } from "../diagnostics/debugLog.js";
 
 const DEFAULT_MODEL = "Xenova/all-MiniLM-L6-v2";
 const DEFAULT_THRESHOLD = 0.58;
@@ -116,6 +117,15 @@ export const transformersEmbeddingExtractor: CommandExtractor = {
           evidence: { kind: "semantic", score, tokenMatches: text.toLowerCase().match(/[a-z0-9']+/g) ?? [] },
         }));
     } catch (error) {
+      appendDebugLogSyncBestEffort({
+        event: "transformers_embedding_extractor_error",
+        input: text,
+        data: {
+          model: embeddingModel(),
+          cacheDir: process.env.TRANSFORMERS_CACHE || path.join(os.homedir(), ".cache", "pig-command-compiler", "transformers"),
+        },
+        error,
+      });
       if (!warned) {
         warned = true;
         console.warn(`[pig-command-compiler] transformers embedding extractor disabled after error: ${(error as Error).message}`);

@@ -1,0 +1,8 @@
+{
+  "name": "git_status",
+  "cmd": "git status --short; echo ---; git diff --stat",
+  "cwd": "/home/bot/projects/pig-command-compiler",
+  "returncode": 0,
+  "stdout": " M README.md\n M package.json\n M src/compiler/transformersEmbeddingExtractor.ts\n M src/diagnostics/commands.ts\n M src/index.ts\n?? docs/\n?? proof-artifacts-20260520-170039/\n?? src/diagnostics/debugLog.ts\n?? tests/diagnostics-smoke.mjs\n---\n README.md                                      | 20 +++++++\n package.json                                   |  3 +-\n src/compiler/transformersEmbeddingExtractor.ts | 10 ++++\n src/diagnostics/commands.ts                    | 54 ++++++++++++++++---\n src/index.ts                                   | 75 ++++++++++++++++----------\n 5 files changed, 126 insertions(+), 36 deletions(-)\n",
+  "stderr": ""
+}

@@ -1,0 +1,8 @@
+{
+  "name": "npm_test",
+  "cmd": "npm test",
+  "cwd": "/home/bot/projects/pig-command-compiler",
+  "returncode": 0,
+  "stdout": "\n> pig-command-compiler@0.1.0 test\n> npm run build && PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/compiler-smoke.mjs && PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/diagnostics-smoke.mjs\n\n\n> pig-command-compiler@0.1.0 build\n> tsc\n\ncompiler smoke tests passed\ndiagnostics smoke test passed\n",
+  "stderr": ""
+}

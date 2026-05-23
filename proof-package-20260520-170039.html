@@ -1,0 +1,1622 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>pig-command-compiler proof package 20260520-170039</title>
+<style>
+body { font-family: system-ui, sans-serif; line-height: 1.35; margin: 2rem; }
+pre { background:#111; color:#eee; padding:1rem; overflow:auto; max-height:36rem; border-radius:8px; }
+code { background:#eee; padding:0.1rem 0.25rem; }
+.ok { color: green; font-weight: bold; } .bad { color: red; font-weight:bold; }
+section { border-top:1px solid #ccc; margin-top:1.5rem; padding-top:1rem; }
+.callout { background:#fff7d6; border:1px solid #e0c461; padding:1rem; border-radius:8px; }
+</style></head><body>
+<h1>pig-command-compiler proof package</h1>
+<p><b>Generated:</b> 2026-05-20T17:00:47.121998</p>
+<p><b>Repo:</b> <code>/home/bot/projects/pig-command-compiler</code></p>
+<p><b>Status:</b> <span class="ok">PASS</span></p>
+<div class="callout"><h2>Executive proof summary</h2>
+<ul>
+<li>I added persistent PCC debug logging code and docs in this repo.</li>
+<li>I added a diagnostics smoke test that loads the built extension, verifies it registers <code>input</code>, <code>/compiler-route</code>, and <code>/compiler-debug-info</code>, runs those paths, and asserts JSONL log events are written.</li>
+<li><code>npm run check</code>, <code>npm test</code>, and <code>npm run test:embedding</code> were run and their raw outputs are embedded below.</li>
+<li>The actual Pig loader proof shows why your live Pig reload did not trigger PCC: current settings contain <code>../../projects/pig-command-compiler</code>; from Pig session cwd <code>/home/bot</code> that resolves to <code>/projects/pig-command-compiler</code>, which fails. Loading the same extension via absolute path succeeds and registers the expected handlers/commands.</li>
+</ul></div>
+<section><h2>Commands and raw outputs</h2><section><h3>pwd_date <span class="ok">exit 0</span></h3>
+<p><b>cwd:</b> <code>/home/bot/projects/pig-command-compiler</code></p>
+<p><b>cmd:</b> <code>pwd; date -Is; node -v; npm -v</code></p>
+<h4>stdout</h4><pre>/home/bot/projects/pig-command-compiler
+2026-05-20T17:00:39-05:00
+v22.22.2
+10.9.7
+</pre>
+<h4>stderr</h4><pre></pre></section><section><h3>git_status <span class="ok">exit 0</span></h3>
+<p><b>cwd:</b> <code>/home/bot/projects/pig-command-compiler</code></p>
+<p><b>cmd:</b> <code>git status --short; echo ---; git diff --stat</code></p>
+<h4>stdout</h4><pre> M README.md
+ M package.json
+ M src/compiler/transformersEmbeddingExtractor.ts
+ M src/diagnostics/commands.ts
+ M src/index.ts
+?? docs/
+?? proof-artifacts-20260520-170039/
+?? src/diagnostics/debugLog.ts
+?? tests/diagnostics-smoke.mjs
+---
+ README.md                                      | 20 +++++++
+ package.json                                   |  3 +-
+ src/compiler/transformersEmbeddingExtractor.ts | 10 ++++
+ src/diagnostics/commands.ts                    | 54 ++++++++++++++++---
+ src/index.ts                                   | 75 ++++++++++++++++----------
+ 5 files changed, 126 insertions(+), 36 deletions(-)
+</pre>
+<h4>stderr</h4><pre></pre></section><section><h3>git_diff <span class="ok">exit 0</span></h3>
+<p><b>cwd:</b> <code>/home/bot/projects/pig-command-compiler</code></p>
+<p><b>cmd:</b> <code>git diff -- README.md package.json src tests docs | sed -n &quot;1,260p&quot;</code></p>
+<h4>stdout</h4><pre>diff --git a/README.md b/README.md
+index 6d8304f..eb10d76 100644
+--- a/README.md
++++ b/README.md
+@@ -24,6 +24,7 @@ Implemented:
+ - typecheck, resolve, lower, preconditions, safety checks
+ - direct execution runner for approved skill scripts
+ - `/compiler-route &lt;text&gt;` diagnostics command
++- persistent JSONL debug log at `~/.pig/agent/logs/pig-command-compiler.jsonl`
+ - smoke tests
+ 
+ Initial target commands:
+@@ -65,6 +66,25 @@ export TRANSFORMERS_CACHE=$HOME/.cache/pig-command-compiler/transformers
+ 
+ Pi can also load the TypeScript extension directly via the package `pi.extensions` entry or with `pi -e ./src/index.ts`.
+ 
++## Debugging
++
++See [`docs/debugging.md`](docs/debugging.md).
++
++Quick commands:
++
++```text
++/compiler-debug-info
++/compiler-route &lt;text&gt;
++```
++
++Canonical compiler runtime log:
++
++```text
++~/.pig/agent/logs/pig-command-compiler.jsonl
++```
++
++Pig conversation/session history is under `~/.pig/agent/sessions/`, but TUI stderr/stdout may not be persisted there.
++
+ ## Safety policy
+ 
+ Direct execution is allowed only when all are true:
+diff --git a/package.json b/package.json
+index 71711c9..c818782 100644
+--- a/package.json
++++ b/package.json
+@@ -25,7 +25,8 @@
+   &quot;scripts&quot;: {
+     &quot;build&quot;: &quot;tsc&quot;,
+     &quot;check&quot;: &quot;tsc --noEmit&quot;,
+-    &quot;test&quot;: &quot;npm run build &amp;&amp; PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/compiler-smoke.mjs&quot;,
++    &quot;test&quot;: &quot;npm run build &amp;&amp; PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/compiler-smoke.mjs &amp;&amp; PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/diagnostics-smoke.mjs&quot;,
++    &quot;test:diagnostics&quot;: &quot;npm run build &amp;&amp; PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/diagnostics-smoke.mjs&quot;,
+     &quot;test:embedding&quot;: &quot;npm run build &amp;&amp; node tests/embedding-smoke.mjs&quot;
+   },
+   &quot;dependencies&quot;: {
+diff --git a/src/compiler/transformersEmbeddingExtractor.ts b/src/compiler/transformersEmbeddingExtractor.ts
+index e9b9b74..1c1c631 100644
+--- a/src/compiler/transformersEmbeddingExtractor.ts
++++ b/src/compiler/transformersEmbeddingExtractor.ts
+@@ -3,6 +3,7 @@ import path from &quot;node:path&quot;;
+ import type { CommandExtractor, CommandIRCandidate } from &quot;./extractors.js&quot;;
+ import { buildMetadataDocs } from &quot;../metadata/loadSkillMetadata.js&quot;;
+ import type { MetadataDoc } from &quot;../metadata/schema.js&quot;;
++import { appendDebugLogSyncBestEffort } from &quot;../diagnostics/debugLog.js&quot;;
+ 
+ const DEFAULT_MODEL = &quot;Xenova/all-MiniLM-L6-v2&quot;;
+ const DEFAULT_THRESHOLD = 0.58;
+@@ -116,6 +117,15 @@ export const transformersEmbeddingExtractor: CommandExtractor = {
+           evidence: { kind: &quot;semantic&quot;, score, tokenMatches: text.toLowerCase().match(/[a-z0-9&#x27;]+/g) ?? [] },
+         }));
+     } catch (error) {
++      appendDebugLogSyncBestEffort({
++        event: &quot;transformers_embedding_extractor_error&quot;,
++        input: text,
++        data: {
++          model: embeddingModel(),
++          cacheDir: process.env.TRANSFORMERS_CACHE || path.join(os.homedir(), &quot;.cache&quot;, &quot;pig-command-compiler&quot;, &quot;transformers&quot;),
++        },
++        error,
++      });
+       if (!warned) {
+         warned = true;
+         console.warn(`[pig-command-compiler] transformers embedding extractor disabled after error: ${(error as Error).message}`);
+diff --git a/src/diagnostics/commands.ts b/src/diagnostics/commands.ts
+index d272cec..0510360 100644
+--- a/src/diagnostics/commands.ts
++++ b/src/diagnostics/commands.ts
+@@ -1,6 +1,7 @@
+ import { compileInput } from &quot;../compiler/compiler.js&quot;;
+ import { buildCompilerResources } from &quot;../runtime/resources.js&quot;;
+ import { formatTrace } from &quot;./logs.js&quot;;
++import { appendDebugLog, debugLogPath } from &quot;./debugLog.js&quot;;
+ 
+ export interface MinimalPiCommandAPI {
+   registerCommand(name: string, options: { description?: string; handler: (args: string, ctx: { cwd?: string; ui?: { notify?: (message: string, type?: string) =&gt; void } }) =&gt; unknown | Promise&lt;unknown&gt; }): void;
+@@ -10,14 +11,51 @@ export function registerDiagnostics(pi: MinimalPiCommandAPI): void {
+   pi.registerCommand(&quot;compiler-route&quot;, {
+     description: &quot;Debug pig-command-compiler routing for input text&quot;,
+     handler: async (args, ctx) =&gt; {
+-      const resources = await buildCompilerResources(ctx.cwd ?? process.cwd(), {
+-        activeDisplay: process.env.DISPLAY ?? &quot;test-display&quot;,
+-        defaultLocation: process.env.PIG_DEFAULT_LOCATION ?? &quot;Jim Falls, WI&quot;,
+-        recentScreenshotPath: process.env.PIG_RECENT_SCREENSHOT,
+-      });
+-      const decision = await compileInput(args, resources);
+-      const text = `${decision.mode}: ${decision.reason}\n${formatTrace(decision.trace)}`;
+-      ctx.ui?.notify?.(text, decision.handled ? &quot;info&quot; : &quot;warn&quot;);
++      const cwd = ctx.cwd ?? process.cwd();
++      try {
++        const resources = await buildCompilerResources(cwd, {
++          activeDisplay: process.env.DISPLAY ?? &quot;test-display&quot;,
++          defaultLocation: process.env.PIG_DEFAULT_LOCATION ?? &quot;Jim Falls, WI&quot;,
++          recentScreenshotPath: process.env.PIG_RECENT_SCREENSHOT,
++        });
++        const decision = await compileInput(args, resources);
++        const text = `${decision.mode}: ${decision.reason}\n${formatTrace(decision.trace)}\n\ndebug log: ${debugLogPath()}`;
++        await appendDebugLog({
++          event: &quot;compiler_route&quot;,
++          cwd,
++          input: args,
++          data: {
++            mode: decision.mode,
++            handled: decision.handled,
++            reason: decision.reason,
++            trace: decision.trace,
++          },
++        });
++        ctx.ui?.notify?.(text, decision.handled ? &quot;info&quot; : &quot;warn&quot;);
++        return text;
++      } catch (error) {
++        await appendDebugLog({ event: &quot;compiler_route_error&quot;, cwd, input: args, error });
++        const text = `pcc err: ${(error as Error).message}\ndebug log: ${debugLogPath()}`;
++        ctx.ui?.notify?.(text, &quot;error&quot;);
++        return text;
++      }
++    },
++  });
++
++  pi.registerCommand(&quot;compiler-debug-info&quot;, {
++    description: &quot;Show pig-command-compiler debug paths and runtime environment&quot;,
++    handler: async (_args, ctx) =&gt; {
++      const text = [
++        `debug log: ${debugLogPath()}`,
++        `pig sessions: ${process.env.HOME}/.pig/agent/sessions/`,
++        `cwd: ${ctx.cwd ?? process.cwd()}`,
++        `pid: ${process.pid}`,
++        `embeddings: ${process.env.PIG_COMMAND_COMPILER_EMBEDDINGS ?? &quot;enabled by default&quot;}`,
++        `embedding model: ${process.env.PIG_COMMAND_COMPILER_EMBEDDING_MODEL ?? &quot;Xenova/all-MiniLM-L6-v2&quot;}`,
++        `transformers cache: ${process.env.TRANSFORMERS_CACHE ?? `${process.env.HOME}/.cache/pig-command-compiler/transformers`}`,
++      ].join(&quot;\n&quot;);
++      await appendDebugLog({ event: &quot;compiler_debug_info&quot;, cwd: ctx.cwd ?? process.cwd(), data: { text } });
++      ctx.ui?.notify?.(text, &quot;info&quot;);
+       return text;
+     },
+   });
+diff --git a/src/index.ts b/src/index.ts
+index 0734659..b70dad8 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -4,6 +4,7 @@ import { buildCompilerResources } from &quot;./runtime/resources.js&quot;;
+ import { runDirectExec } from &quot;./runtime/directExec.js&quot;;
+ import { buildResultMessage, buildSkillMessage } from &quot;./runtime/skillMessages.js&quot;;
+ import { appendImagePath, type PigImageAttachment } from &quot;./runtime/images.js&quot;;
++import { appendDebugLog, debugLogPath } from &quot;./diagnostics/debugLog.js&quot;;
+ 
+ interface MinimalExtensionAPI {
+   on(event: &quot;input&quot;, handler: (event: { text: string; images?: PigImageAttachment[]; source?: string }, ctx: { cwd?: string }) =&gt; unknown | Promise&lt;unknown&gt;): void;
+@@ -18,35 +19,55 @@ export default function pigCommandCompiler(pi: MinimalExtensionAPI) {
+       return { action: &quot;continue&quot; as const };
+     }
+ 
+-    const resources = await buildCompilerResources(ctx.cwd ?? process.cwd());
+-    const result = await compileInput(text, resources);
+-
+-    if (result.mode === &quot;direct_exec&quot; &amp;&amp; result.directExec) {
+-      const output = await runDirectExec(result.directExec);
+-      if (output.code !== 0) return { action: &quot;continue&quot; as const };
+-      const shouldAttachImage = Boolean(
+-        output.imagePath &amp;&amp;
+-          result.command?.intent &amp;&amp;
+-          result.directExec.action.attachImageWhenIntent === result.command.intent,
+-      );
+-      return {
+-        action: &quot;transform&quot; as const,
+-        text: shouldAttachImage
+-          ? `${buildResultMessage(result, output)}\n\nOriginal request: ${text}\nAnswer the original request using the attached image. Do not invent details that are not visible.`
+-          : buildResultMessage(result, output),
+-        images: await appendImagePath(event.images, shouldAttachImage ? output.imagePath : undefined),
+-      };
+-    }
++    try {
++      const cwd = ctx.cwd ?? process.cwd();
++      const resources = await buildCompilerResources(cwd);
++      const result = await compileInput(text, resources);
++      await appendDebugLog({
++        event: &quot;input_decision&quot;,
++        cwd,
++        input: text,
++        data: {
++          mode: result.mode,
++          handled: result.handled,
++          reason: result.reason,
++          selected: result.trace.selected,
++          steps: result.trace.steps,
++        },
++      });
+ 
+-    if (result.mode === &quot;pig_skill&quot; &amp;&amp; result.skill) {
+-      return {
+-        action: &quot;transform&quot; as const,
+-        text: buildSkillMessage(result.skill, text),
+-        images: event.images,
+-      };
+-    }
++      if (result.mode === &quot;direct_exec&quot; &amp;&amp; result.directExec) {
++        const output = await runDirectExec(result.directExec);
++        await appendDebugLog({ event: &quot;direct_exec_result&quot;, cwd, input: text, data: { action: result.directExec.action.id, output } });
++        if (output.code !== 0) return { action: &quot;continue&quot; as const };
++        const shouldAttachImage = Boolean(
++          output.imagePath &amp;&amp;
++            result.command?.intent &amp;&amp;
++            result.directExec.action.attachImageWhenIntent === result.command.intent,
++        );
++        return {
++          action: &quot;transform&quot; as const,
++          text: shouldAttachImage
++            ? `${buildResultMessage(result, output)}\n\nOriginal request: ${text}\nAnswer the original request using the attached image. Do not invent details that are not visible.`
++            : buildResultMessage(result, output),
++          images: await appendImagePath(event.images, shouldAttachImage ? output.imagePath : undefined),
++        };
++      }
++
++      if (result.mode === &quot;pig_skill&quot; &amp;&amp; result.skill) {
++        return {
++          action: &quot;transform&quot; as const,
++          text: buildSkillMessage(result.skill, text),
++          images: event.images,
++        };
++      }
+ 
+-    return { action: &quot;continue&quot; as const };
++      return { action: &quot;continue&quot; as const };
++    } catch (error) {
++      await appendDebugLog({ event: &quot;input_error&quot;, cwd: ctx.cwd ?? process.cwd(), input: text, error });
++      console.warn(`[pig-command-compiler] input error; see ${debugLogPath()}: ${(error as Error).message}`);
++      return { action: &quot;continue&quot; as const };
++    }
+   });
+ 
+   if (pi.registerCommand) registerDiagnostics(pi as Parameters&lt;typeof registerDiagnostics&gt;[0]);
+</pre>
+<h4>stderr</h4><pre></pre></section><section><h3>npm_check <span class="ok">exit 0</span></h3>
+<p><b>cwd:</b> <code>/home/bot/projects/pig-command-compiler</code></p>
+<p><b>cmd:</b> <code>npm run check</code></p>
+<h4>stdout</h4><pre>
+&gt; pig-command-compiler@0.1.0 check
+&gt; tsc --noEmit
+
+</pre>
+<h4>stderr</h4><pre></pre></section><section><h3>npm_test <span class="ok">exit 0</span></h3>
+<p><b>cwd:</b> <code>/home/bot/projects/pig-command-compiler</code></p>
+<p><b>cmd:</b> <code>npm test</code></p>
+<h4>stdout</h4><pre>
+&gt; pig-command-compiler@0.1.0 test
+&gt; npm run build &amp;&amp; PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/compiler-smoke.mjs &amp;&amp; PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/diagnostics-smoke.mjs
+
+
+&gt; pig-command-compiler@0.1.0 build
+&gt; tsc
+
+compiler smoke tests passed
+diagnostics smoke test passed
+</pre>
+<h4>stderr</h4><pre></pre></section><section><h3>npm_test_embedding <span class="ok">exit 0</span></h3>
+<p><b>cwd:</b> <code>/home/bot/projects/pig-command-compiler</code></p>
+<p><b>cmd:</b> <code>npm run test:embedding</code></p>
+<h4>stdout</h4><pre>
+&gt; pig-command-compiler@0.1.0 test:embedding
+&gt; npm run build &amp;&amp; node tests/embedding-smoke.mjs
+
+
+&gt; pig-command-compiler@0.1.0 build
+&gt; tsc
+
+embedding smoke test passed semantic match take-screenshot:visual_inspect score=0.587
+</pre>
+<h4>stderr</h4><pre></pre></section><section><h3>extension_registers_dist <span class="ok">exit 0</span></h3>
+<p><b>cwd:</b> <code>/home/bot/projects/pig-command-compiler</code></p>
+<p><b>cmd:</b> <code>node -e &quot;import(&#x27;./dist/src/index.js&#x27;).then(m=&gt;{let events=[];let cmds=[];m.default({on:(e,h)=&gt;events.push(e),registerCommand:(n,o)=&gt;cmds.push(n)}); console.log(JSON.stringify({events,cmds}, null, 2))}).catch(e=&gt;{console.error(e); process.exit(1)})&quot;</code></p>
+<h4>stdout</h4><pre>{
+  &quot;events&quot;: [
+    &quot;input&quot;
+  ],
+  &quot;cmds&quot;: [
+    &quot;compiler-route&quot;,
+    &quot;compiler-debug-info&quot;
+  ]
+}
+</pre>
+<h4>stderr</h4><pre></pre></section><section><h3>diagnostics_proof_run <span class="ok">exit 0</span></h3>
+<p><b>cwd:</b> <code>/home/bot/projects/pig-command-compiler</code></p>
+<p><b>cmd:</b> <code>node /home/bot/projects/pig-command-compiler/proof-artifacts-20260520-170039/diagnostics-proof-run.mjs</code></p>
+<h4>stdout</h4><pre>Path&quot;: &quot;/home/bot/projects/pig-command-compiler/proof-artifacts-20260520-170039/diagnostics-log/pig-command-compiler.jsonl&quot;,
+  &quot;logLines&quot;: [
+    {
+      &quot;ts&quot;: &quot;2026-05-20T22:00:45.249Z&quot;,
+      &quot;pid&quot;: 94185,
+      &quot;event&quot;: &quot;compiler_debug_info&quot;,
+      &quot;cwd&quot;: &quot;/home/bot/projects/pig-command-compiler&quot;,
+      &quot;data&quot;: {
+        &quot;text&quot;: &quot;debug log: /home/bot/projects/pig-command-compiler/proof-artifacts-20260520-170039/diagnostics-log/pig-command-compiler.jsonl\npig sessions: /home/bot/.pig/agent/sessions/\ncwd: /home/bot/projects/pig-command-compiler\npid: 94185\nembeddings: 0\nembedding model: Xenova/all-MiniLM-L6-v2\ntransformers cache: /home/bot/.cache/pig-command-compiler/transformers&quot;
+      }
+    },
+    {
+      &quot;ts&quot;: &quot;2026-05-20T22:00:45.257Z&quot;,
+      &quot;pid&quot;: 94185,
+      &quot;event&quot;: &quot;compiler_route&quot;,
+      &quot;cwd&quot;: &quot;/home/bot/projects/pig-command-compiler&quot;,
+      &quot;input&quot;: &quot;weather today&quot;,
+      &quot;data&quot;: {
+        &quot;mode&quot;: &quot;direct_exec&quot;,
+        &quot;handled&quot;: true,
+        &quot;reason&quot;: &quot;lowered weather lookup to weather brief action&quot;,
+        &quot;trace&quot;: {
+          &quot;input&quot;: &quot;weather today&quot;,
+          &quot;candidates&quot;: [
+            {
+              &quot;ir&quot;: {
+                &quot;kind&quot;: &quot;command&quot;,
+                &quot;domain&quot;: &quot;weather&quot;,
+                &quot;action&quot;: &quot;lookup&quot;,
+                &quot;object&quot;: &quot;weather&quot;,
+                &quot;target&quot;: &quot;current&quot;,
+                &quot;time&quot;: &quot;today&quot;,
+                &quot;confidence&quot;: 0.89
+              },
+              &quot;extractor&quot;: &quot;bm25-metadata&quot;,
+              &quot;matchedTerms&quot;: [
+                &quot;weather&quot;,
+                &quot;today&quot;
+              ],
+              &quot;reason&quot;: &quot;matched skill metadata weather:lookup&quot;,
+              &quot;evidence&quot;: {
+                &quot;kind&quot;: &quot;metadata&quot;,
+                &quot;score&quot;: 0.89,
+                &quot;exactExample&quot;: true,
+                &quot;exactKeywordPhrase&quot;: true,
+                &quot;matchedExamples&quot;: [
+                  &quot;weather today&quot;
+                ],
+                &quot;matchedKeywords&quot;: [
+                  &quot;weather&quot;
+                ],
+                &quot;anchorMatches&quot;: [
+                  &quot;weather&quot;
+                ],
+                &quot;actionCueMatches&quot;: [
+                  &quot;weather&quot;
+                ],
+                &quot;tokenMatches&quot;: [
+                  &quot;weather&quot;,
+                  &quot;today&quot;
+                ]
+              }
+            },
+            {
+              &quot;ir&quot;: {
+                &quot;kind&quot;: &quot;command&quot;,
+                &quot;domain&quot;: &quot;weather&quot;,
+                &quot;action&quot;: &quot;lookup&quot;,
+                &quot;object&quot;: &quot;weather&quot;,
+                &quot;target&quot;: &quot;current&quot;,
+                &quot;confidence&quot;: 0.88
+              },
+              &quot;matchedTerms&quot;: [
+                &quot;weather&quot;
+              ],
+              &quot;reason&quot;: &quot;matched weather lookup term&quot;,
+              &quot;extractor&quot;: &quot;rules&quot;
+            }
+          ],
+          &quot;steps&quot;: [
+            {
+              &quot;stage&quot;: &quot;extract&quot;,
+              &quot;ok&quot;: true,
+              &quot;message&quot;: &quot;produced 2 candidates&quot;
+            },
+            {
+              &quot;stage&quot;: &quot;select&quot;,
+              &quot;ok&quot;: true,
+              &quot;message&quot;: &quot;matched skill metadata weather:lookup&quot;,
+              &quot;data&quot;: {
+                &quot;ir&quot;: {
+                  &quot;kind&quot;: &quot;command&quot;,
+                  &quot;domain&quot;: &quot;weather&quot;,
+                  &quot;action&quot;: &quot;lookup&quot;,
+                  &quot;object&quot;: &quot;weather&quot;,
+                  &quot;target&quot;: &quot;current&quot;,
+                  &quot;time&quot;: &quot;today&quot;,
+                  &quot;confidence&quot;: 0.89
+                },
+                &quot;extractor&quot;: &quot;bm25-metadata&quot;,
+                &quot;matchedTerms&quot;: [
+                  &quot;weather&quot;,
+                  &quot;today&quot;
+                ],
+                &quot;reason&quot;: &quot;matched skill metadata weather:lookup&quot;,
+                &quot;evidence&quot;: {
+                  &quot;kind&quot;: &quot;metadata&quot;,
+                  &quot;score&quot;: 0.89,
+                  &quot;exactExample&quot;: true,
+                  &quot;exactKeywordPhrase&quot;: true,
+                  &quot;matchedExamples&quot;: [
+                    &quot;weather today&quot;
+                  ],
+                  &quot;matchedKeywords&quot;: [
+                    &quot;weather&quot;
+                  ],
+                  &quot;anchorMatches&quot;: [
+                    &quot;weather&quot;
+                  ],
+                  &quot;actionCueMatches&quot;: [
+                    &quot;weather&quot;
+                  ],
+                  &quot;tokenMatches&quot;: [
+                    &quot;weather&quot;,
+                    &quot;today&quot;
+                  ]
+                }
+              }
+            },
+            {
+              &quot;stage&quot;: &quot;evidence&quot;,
+              &quot;ok&quot;: true,
+              &quot;message&quot;: &quot;metadata exact example evidence&quot;,
+              &quot;data&quot;: {
+                &quot;kind&quot;: &quot;metadata&quot;,
+                &quot;score&quot;: 0.89,
+                &quot;exactExample&quot;: true,
+                &quot;exactKeywordPhrase&quot;: true,
+                &quot;matchedExamples&quot;: [
+                  &quot;weather today&quot;
+                ],
+                &quot;matchedKeywords&quot;: [
+                  &quot;weather&quot;
+                ],
+                &quot;anchorMatches&quot;: [
+                  &quot;weather&quot;
+                ],
+                &quot;actionCueMatches&quot;: [
+                  &quot;weather&quot;
+                ],
+                &quot;tokenMatches&quot;: [
+                  &quot;weather&quot;,
+                  &quot;today&quot;
+                ]
+              }
+            },
+            {
+              &quot;stage&quot;: &quot;typecheck&quot;,
+              &quot;ok&quot;: true,
+              &quot;message&quot;: &quot;valid command ir&quot;
+            },
+            {
+              &quot;stage&quot;: &quot;resolve&quot;,
+              &quot;ok&quot;: true,
+              &quot;message&quot;: &quot;resolved state references&quot;,
+              &quot;data&quot;: {
+                &quot;activeDisplay&quot;: &quot;:0&quot;,
+                &quot;defaultLocation&quot;: &quot;Jim Falls, WI&quot;
+              }
+            },
+            {
+              &quot;stage&quot;: &quot;lower&quot;,
+              &quot;ok&quot;: true,
+              &quot;message&quot;: &quot;lowered weather lookup to weather brief action&quot;,
+              &quot;data&quot;: {
+                &quot;ok&quot;: true,
+                &quot;mode&quot;: &quot;direct_exec&quot;,
+                &quot;directExec&quot;: {
+                  &quot;action&quot;: {
+                    &quot;id&quot;: &quot;weather.brief&quot;,
+                    &quot;description&quot;: &quot;Fetch a concise official weather.gov current/near-term weather summary for the default local area.&quot;,
+                    &quot;script&quot;: &quot;scripts/weather-fetch.sh&quot;,
+                    &quot;directExec&quot;: true,
+                    &quot;family&quot;: &quot;weather&quot;,
+                    &quot;safety&quot;: &quot;read_only_network&quot;,
+                    &quot;requiresConfirmation&quot;: false,
+                    &quot;defaultArgs&quot;: [
+                      &quot;--location&quot;,
+                      &quot;Jim Falls, WI&quot;,
+                      &quot;--mode&quot;,
+                      &quot;brief&quot;
+                    ],
+                    &quot;keywords&quot;: [
+                      &quot;weather&quot;,
+                      &quot;forecast&quot;,
+                      &quot;temperature&quot;,
+                      &quot;rain&quot;,
+                      &quot;raining&quot;,
+                      &quot;snow&quot;,
+                      &quot;wind&quot;,
+                      &quot;jacket&quot;,
+                      &quot;umbrella&quot;,
+                      &quot;outside&quot;,
+                      &quot;tonight&quot;,
+                      &quot;tomorrow&quot;,
+                      &quot;wear today&quot;
+                    ],
+                    &quot;exactPhrases&quot;: [
+                      &quot;what&#x27;s the weather&quot;,
+                      &quot;what is the weather&quot;,
+                      &quot;weather today&quot;,
+                      &quot;current weather&quot;,
+                      &quot;current forecast&quot;,
+                      &quot;do i need a jacket&quot;,
+                      &quot;is it raining&quot;,
+                      &quot;is it going to rain&quot;,
+                      &quot;what should i wear today&quot;
+                    ],
+                    &quot;skillName&quot;: &quot;weather&quot;,
+                    &quot;skillDir&quot;: &quot;/home/bot/.pig/agent/skills/weather&quot;
+                  },
+                  &quot;requiredContext&quot;: [
+                    &quot;default_location&quot;
+                  ],
+                  &quot;reason&quot;: &quot;lowered weather lookup to weather brief action&quot;
+                },
+                &quot;skill&quot;: null,
+                &quot;reason&quot;: &quot;lowered weather lookup to weather brief action&quot;
+              }
+            },
+            {
+              &quot;stage&quot;: &quot;preconditions&quot;,
+              &quot;ok&quot;: true,
+              &quot;message&quot;: &quot;all preconditions satisfied&quot;,
+              &quot;data&quot;: []
+            },
+            {
+              &quot;stage&quot;: &quot;safety&quot;,
+              &quot;ok&quot;: true,
+              &quot;message&quot;: &quot;direct exec action is safe&quot;
+            }
+          ],
+          &quot;selected&quot;: {
+            &quot;ir&quot;: {
+              &quot;kind&quot;: &quot;command&quot;,
+              &quot;domain&quot;: &quot;weather&quot;,
+              &quot;action&quot;: &quot;lookup&quot;,
+              &quot;object&quot;: &quot;weather&quot;,
+              &quot;target&quot;: &quot;current&quot;,
+              &quot;time&quot;: &quot;today&quot;,
+              &quot;confidence&quot;: 0.89
+            },
+            &quot;extractor&quot;: &quot;bm25-metadata&quot;,
+            &quot;matchedTerms&quot;: [
+              &quot;weather&quot;,
+              &quot;today&quot;
+            ],
+            &quot;reason&quot;: &quot;matched skill metadata weather:lookup&quot;,
+            &quot;evidence&quot;: {
+              &quot;kind&quot;: &quot;metadata&quot;,
+              &quot;score&quot;: 0.89,
+              &quot;exactExample&quot;: true,
+              &quot;exactKeywordPhrase&quot;: true,
+              &quot;matchedExamples&quot;: [
+                &quot;weather today&quot;
+              ],
+              &quot;matchedKeywords&quot;: [
+                &quot;weather&quot;
+              ],
+              &quot;anchorMatches&quot;: [
+                &quot;weather&quot;
+              ],
+              &quot;actionCueMatches&quot;: [
+                &quot;weather&quot;
+              ],
+              &quot;tokenMatches&quot;: [
+                &quot;weather&quot;,
+                &quot;today&quot;
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      &quot;ts&quot;: &quot;2026-05-20T22:00:45.260Z&quot;,
+      &quot;pid&quot;: 94185,
+      &quot;event&quot;: &quot;input_decision&quot;,
+      &quot;cwd&quot;: &quot;/home/bot/projects/pig-command-compiler&quot;,
+      &quot;input&quot;: &quot;weather today&quot;,
+      &quot;data&quot;: {
+        &quot;mode&quot;: &quot;direct_exec&quot;,
+        &quot;handled&quot;: true,
+        &quot;reason&quot;: &quot;lowered weather lookup to weather brief action&quot;,
+        &quot;selected&quot;: {
+          &quot;ir&quot;: {
+            &quot;kind&quot;: &quot;command&quot;,
+            &quot;domain&quot;: &quot;weather&quot;,
+            &quot;action&quot;: &quot;lookup&quot;,
+            &quot;object&quot;: &quot;weather&quot;,
+            &quot;target&quot;: &quot;current&quot;,
+            &quot;time&quot;: &quot;today&quot;,
+            &quot;confidence&quot;: 0.89
+          },
+          &quot;extractor&quot;: &quot;bm25-metadata&quot;,
+          &quot;matchedTerms&quot;: [
+            &quot;weather&quot;,
+            &quot;today&quot;
+          ],
+          &quot;reason&quot;: &quot;matched skill metadata weather:lookup&quot;,
+          &quot;evidence&quot;: {
+            &quot;kind&quot;: &quot;metadata&quot;,
+            &quot;score&quot;: 0.89,
+            &quot;exactExample&quot;: true,
+            &quot;exactKeywordPhrase&quot;: true,
+            &quot;matchedExamples&quot;: [
+              &quot;weather today&quot;
+            ],
+            &quot;matchedKeywords&quot;: [
+              &quot;weather&quot;
+            ],
+            &quot;anchorMatches&quot;: [
+              &quot;weather&quot;
+            ],
+            &quot;actionCueMatches&quot;: [
+              &quot;weather&quot;
+            ],
+            &quot;tokenMatches&quot;: [
+              &quot;weather&quot;,
+              &quot;today&quot;
+            ]
+          }
+        },
+        &quot;steps&quot;: [
+          {
+            &quot;stage&quot;: &quot;extract&quot;,
+            &quot;ok&quot;: true,
+            &quot;message&quot;: &quot;produced 2 candidates&quot;
+          },
+          {
+            &quot;stage&quot;: &quot;select&quot;,
+            &quot;ok&quot;: true,
+            &quot;message&quot;: &quot;matched skill metadata weather:lookup&quot;,
+            &quot;data&quot;: {
+              &quot;ir&quot;: {
+                &quot;kind&quot;: &quot;command&quot;,
+                &quot;domain&quot;: &quot;weather&quot;,
+                &quot;action&quot;: &quot;lookup&quot;,
+                &quot;object&quot;: &quot;weather&quot;,
+                &quot;target&quot;: &quot;current&quot;,
+                &quot;time&quot;: &quot;today&quot;,
+                &quot;confidence&quot;: 0.89
+              },
+              &quot;extractor&quot;: &quot;bm25-metadata&quot;,
+              &quot;matchedTerms&quot;: [
+                &quot;weather&quot;,
+                &quot;today&quot;
+              ],
+              &quot;reason&quot;: &quot;matched skill metadata weather:lookup&quot;,
+              &quot;evidence&quot;: {
+                &quot;kind&quot;: &quot;metadata&quot;,
+                &quot;score&quot;: 0.89,
+                &quot;exactExample&quot;: true,
+                &quot;exactKeywordPhrase&quot;: true,
+                &quot;matchedExamples&quot;: [
+                  &quot;weather today&quot;
+                ],
+                &quot;matchedKeywords&quot;: [
+                  &quot;weather&quot;
+                ],
+                &quot;anchorMatches&quot;: [
+                  &quot;weather&quot;
+                ],
+                &quot;actionCueMatches&quot;: [
+                  &quot;weather&quot;
+                ],
+                &quot;tokenMatches&quot;: [
+                  &quot;weather&quot;,
+                  &quot;today&quot;
+                ]
+              }
+            }
+          },
+          {
+            &quot;stage&quot;: &quot;evidence&quot;,
+            &quot;ok&quot;: true,
+            &quot;message&quot;: &quot;metadata exact example evidence&quot;,
+            &quot;data&quot;: {
+              &quot;kind&quot;: &quot;metadata&quot;,
+              &quot;score&quot;: 0.89,
+              &quot;exactExample&quot;: true,
+              &quot;exactKeywordPhrase&quot;: true,
+              &quot;matchedExamples&quot;: [
+                &quot;weather today&quot;
+              ],
+              &quot;matchedKeywords&quot;: [
+                &quot;weather&quot;
+              ],
+              &quot;anchorMatches&quot;: [
+                &quot;weather&quot;
+              ],
+              &quot;actionCueMatches&quot;: [
+                &quot;weather&quot;
+              ],
+              &quot;tokenMatches&quot;: [
+                &quot;weather&quot;,
+                &quot;today&quot;
+              ]
+            }
+          },
+          {
+            &quot;stage&quot;: &quot;typecheck&quot;,
+            &quot;ok&quot;: true,
+            &quot;message&quot;: &quot;valid command ir&quot;
+          },
+          {
+            &quot;stage&quot;: &quot;resolve&quot;,
+            &quot;ok&quot;: true,
+            &quot;message&quot;: &quot;resolved state references&quot;,
+            &quot;data&quot;: {
+              &quot;activeDisplay&quot;: &quot;:0&quot;,
+              &quot;defaultLocation&quot;: &quot;Jim Falls, WI&quot;
+            }
+          },
+          {
+            &quot;stage&quot;: &quot;lower&quot;,
+            &quot;ok&quot;: true,
+            &quot;message&quot;: &quot;lowered weather lookup to weather brief action&quot;,
+            &quot;data&quot;: {
+              &quot;ok&quot;: true,
+              &quot;mode&quot;: &quot;direct_exec&quot;,
+              &quot;directExec&quot;: {
+                &quot;action&quot;: {
+                  &quot;id&quot;: &quot;weather.brief&quot;,
+                  &quot;description&quot;: &quot;Fetch a concise official weather.gov current/near-term weather summary for the default local area.&quot;,
+                  &quot;script&quot;: &quot;scripts/weather-fetch.sh&quot;,
+                  &quot;directExec&quot;: true,
+                  &quot;family&quot;: &quot;weather&quot;,
+                  &quot;safety&quot;: &quot;read_only_network&quot;,
+                  &quot;requiresConfirmation&quot;: false,
+                  &quot;defaultArgs&quot;: [
+                    &quot;--location&quot;,
+                    &quot;Jim Falls, WI&quot;,
+                    &quot;--mode&quot;,
+                    &quot;brief&quot;
+                  ],
+                  &quot;keywords&quot;: [
+                    &quot;weather&quot;,
+                    &quot;forecast&quot;,
+                    &quot;temperature&quot;,
+                    &quot;rain&quot;,
+                    &quot;raining&quot;,
+                    &quot;snow&quot;,
+                    &quot;wind&quot;,
+                    &quot;jacket&quot;,
+                    &quot;umbrella&quot;,
+                    &quot;outside&quot;,
+                    &quot;tonight&quot;,
+                    &quot;tomorrow&quot;,
+                    &quot;wear today&quot;
+                  ],
+                  &quot;exactPhrases&quot;: [
+                    &quot;what&#x27;s the weather&quot;,
+                    &quot;what is the weather&quot;,
+                    &quot;weather today&quot;,
+                    &quot;current weather&quot;,
+                    &quot;current forecast&quot;,
+                    &quot;do i need a jacket&quot;,
+                    &quot;is it raining&quot;,
+                    &quot;is it going to rain&quot;,
+                    &quot;what should i wear today&quot;
+                  ],
+                  &quot;skillName&quot;: &quot;weather&quot;,
+                  &quot;skillDir&quot;: &quot;/home/bot/.pig/agent/skills/weather&quot;
+                },
+                &quot;requiredContext&quot;: [
+                  &quot;default_location&quot;
+                ],
+                &quot;reason&quot;: &quot;lowered weather lookup to weather brief action&quot;
+              },
+              &quot;skill&quot;: null,
+              &quot;reason&quot;: &quot;lowered weather lookup to weather brief action&quot;
+            }
+          },
+          {
+            &quot;stage&quot;: &quot;preconditions&quot;,
+            &quot;ok&quot;: true,
+            &quot;message&quot;: &quot;all preconditions satisfied&quot;,
+            &quot;data&quot;: []
+          },
+          {
+            &quot;stage&quot;: &quot;safety&quot;,
+            &quot;ok&quot;: true,
+            &quot;message&quot;: &quot;direct exec action is safe&quot;
+          }
+        ]
+      }
+    },
+    {
+      &quot;ts&quot;: &quot;2026-05-20T22:00:46.116Z&quot;,
+      &quot;pid&quot;: 94185,
+      &quot;event&quot;: &quot;direct_exec_result&quot;,
+      &quot;cwd&quot;: &quot;/home/bot/projects/pig-command-compiler&quot;,
+      &quot;input&quot;: &quot;weather today&quot;,
+      &quot;data&quot;: {
+        &quot;action&quot;: &quot;weather.brief&quot;,
+        &quot;output&quot;: {
+          &quot;stdout&quot;: &quot;{\n  \&quot;source\&quot;: \&quot;weather.gov/NWS\&quot;,\n  \&quot;generatedAt\&quot;: \&quot;2026-05-20T22:00:46Z\&quot;,\n  \&quot;query\&quot;: \&quot;Jim Falls, WI\&quot;,\n  \&quot;geocodedName\&quot;: \&quot;Jim Falls, Town of Anson, Chippewa County, Wisconsin, 54748, United States\&quot;,\n  \&quot;relativeLocation\&quot;: \&quot;Jim Falls, WI\&quot;,\n  \&quot;urls\&quot;: {\n    \&quot;forecast\&quot;: \&quot;https://api.weather.gov/gridpoints/MPX/174,77/forecast\&quot;,\n    \&quot;hourly\&quot;: \&quot;https://api.weather.gov/gridpoints/MPX/174,77/forecast/hourly\&quot;,\n    \&quot;alerts\&quot;: \&quot;https://api.weather.gov/alerts/active?point=45.0452,-91.2729\&quot;\n  },\n  \&quot;now\&quot;: {\n    \&quot;time\&quot;: \&quot;2026-05-20T16:00:00-05:00\&quot;,\n    \&quot;name\&quot;: \&quot;\&quot;,\n    \&quot;temperature\&quot;: 58,\n    \&quot;unit\&quot;: \&quot;F\&quot;,\n    \&quot;shortForecast\&quot;: \&quot;Mostly Sunny\&quot;,\n    \&quot;detailedForecast\&quot;: \&quot;\&quot;,\n    \&quot;windSpeed\&quot;: \&quot;5 mph\&quot;,\n    \&quot;windDirection\&quot;: \&quot;NE\&quot;,\n    \&quot;precipitationChance\&quot;: 0\n  },\n  \&quot;nextHours\&quot;: [\n    {\n      \&quot;time\&quot;: \&quot;2026-05-20T16:00:00-05:00\&quot;,\n      \&quot;temperature\&quot;: 58,\n      \&quot;unit\&quot;: \&quot;F\&quot;,\n      \&quot;shortForecast\&quot;: \&quot;Mostly Sunny\&quot;,\n      \&quot;windSpeed\&quot;: \&quot;5 mph\&quot;,\n      \&quot;windDirection\&quot;: \&quot;NE\&quot;,\n      \&quot;precipitationChance\&quot;: 0\n    },\n    {\n      \&quot;time\&quot;: \&quot;2026-05-20T17:00:00-05:00\&quot;,\n      \&quot;temperature\&quot;: 59,\n      \&quot;unit\&quot;: \&quot;F\&quot;,\n      \&quot;shortForecast\&quot;: \&quot;Mostly Sunny\&quot;,\n      \&quot;windSpeed\&quot;: \&quot;5 mph\&quot;,\n      \&quot;windDirection\&quot;: \&quot;NE\&quot;,\n      \&quot;precipitationChance\&quot;: 0\n    },\n    {\n      \&quot;time\&quot;: \&quot;2026-05-20T18:00:00-05:00\&quot;,\n      \&quot;temperature\&quot;: 59,\n      \&quot;unit\&quot;: \&quot;F\&quot;,\n      \&quot;shortForecast\&quot;: \&quot;Partly Cloudy\&quot;,\n      \&quot;windSpeed\&quot;: \&quot;5 mph\&quot;,\n      \&quot;windDirection\&quot;: \&quot;NE\&quot;,\n      \&quot;precipitationChance\&quot;: 0\n    },\n    {\n      \&quot;time\&quot;: \&quot;2026-05-20T19:00:00-05:00\&quot;,\n      \&quot;temperature\&quot;: 60,\n      \&quot;unit\&quot;: \&quot;F\&quot;,\n      \&quot;shortForecast\&quot;: \&quot;Partly Cloudy\&quot;,\n      \&quot;windSpeed\&quot;: \&quot;5 mph\&quot;,\n      \&quot;windDirection\&quot;: \&quot;NE\&quot;,\n      \&quot;precipitationChance\&quot;: 0\n    },\n    {\n      \&quot;time\&quot;: \&quot;2026-05-20T20:00:00-05:00\&quot;,\n      \&quot;temperature\&quot;: 58,\n      \&quot;unit\&quot;: \&quot;F\&quot;,\n      \&quot;shortForecast\&quot;: \&quot;Partly Cloudy\&quot;,\n      \&quot;windSpeed\&quot;: \&quot;5 mph\&quot;,\n      \&quot;windDirection\&quot;: \&quot;NE\&quot;,\n      \&quot;precipitationChance\&quot;: 0\n    },\n    {\n      \&quot;time\&quot;: \&quot;2026-05-20T21:00:00-05:00\&quot;,\n      \&quot;temperature\&quot;: 53,\n      \&quot;unit\&quot;: \&quot;F\&quot;,\n      \&quot;shortForecast\&quot;: \&quot;Mostly Cloudy\&quot;,\n      \&quot;windSpeed\&quot;: \&quot;5 mph\&quot;,\n      \&quot;windDirection\&quot;: \&quot;NE\&quot;,\n      \&quot;precipitationChance\&quot;: 0\n    }\n  ],\n  \&quot;periods\&quot;: [\n    {\n      \&quot;name\&quot;: \&quot;This Afternoon\&quot;,\n      \&quot;temperature\&quot;: 62,\n      \&quot;unit\&quot;: \&quot;F\&quot;,\n      \&quot;shortForecast\&quot;: \&quot;Mostly Sunny\&quot;,\n      \&quot;detailedForecast\&quot;: \&quot;Mostly sunny. High near 62, with temperatures falling to around 59 in the afternoon. Northeast wind around 5 mph.\&quot;,\n      \&quot;windSpeed\&quot;: \&quot;5 mph\&quot;,\n      \&quot;windDirection\&quot;: \&quot;NE\&quot;,\n      \&quot;precipitationChance\&quot;: 0\n    },\n    {\n      \&quot;name\&quot;: \&quot;Tonight\&quot;,\n      \&quot;temperature\&quot;: 40,\n      \&quot;unit\&quot;: \&quot;F\&quot;,\n      \&quot;shortForecast\&quot;: \&quot;Partly Cloudy\&quot;,\n      \&quot;detailedForecast\&quot;: \&quot;Partly cloudy, with a low around 40. East wind around 5 mph.\&quot;,\n      \&quot;windSpeed\&quot;: \&quot;5 mph\&quot;,\n      \&quot;windDirection\&quot;: \&quot;E\&quot;,\n      \&quot;precipitationChance\&quot;: 0\n    },\n    {\n      \&quot;name\&quot;: \&quot;Thursday\&quot;,\n      \&quot;temperature\&quot;: 64,\n      \&quot;unit\&quot;: \&quot;F\&quot;,\n      \&quot;shortForecast\&quot;: \&quot;Partly Sunny\&quot;,\n      \&quot;detailedForecast\&quot;: \&quot;Partly sunny, with a high near 64. Southeast wind 5 to 10 mph.\&quot;,\n      \&quot;windSpeed\&quot;: \&quot;5 to 10 mph\&quot;,\n      \&quot;windDirection\&quot;: \&quot;SE\&quot;,\n      \&quot;precipitationChance\&quot;: 1\n    },\n    {\n      \&quot;name\&quot;: \&quot;Thursday Night\&quot;,\n      \&quot;temperature\&quot;: 42,\n      \&quot;unit\&quot;: \&quot;F\&quot;,\n      \&quot;shortForecast\&quot;: \&quot;Mostly Cloudy\&quot;,\n      \&quot;detailedForecast\&quot;: \&quot;Mostly cloudy, with a low around 42. East southeast wind 5 to 10 mph.\&quot;,\n      \&quot;windSpeed\&quot;: \&quot;5 to 10 mph\&quot;,\n      \&quot;windDirection\&quot;: \&quot;ESE\&quot;,\n      \&quot;precipitationChance\&quot;: 1\n    }\n  ],\n  \&quot;alerts\&quot;: []\n}\n&quot;,
+          &quot;stderr&quot;: &quot;&quot;,
+          &quot;code&quot;: 0
+        }
+      }
+    }
+  ]
+}
+</pre>
+<h4>stderr</h4><pre></pre></section><section><h3>pig_loader_proof <span class="ok">exit 0</span></h3>
+<p><b>cwd:</b> <code>/home/bot/projects/pig-command-compiler</code></p>
+<p><b>cmd:</b> <code>node /home/bot/projects/pig-command-compiler/proof-artifacts-20260520-170039/pig-loader-proof.mjs</code></p>
+<h4>stdout</h4><pre>{
+  &quot;settingsPath&quot;: &quot;/home/bot/.pig/agent/settings.json&quot;,
+  &quot;configured&quot;: &quot;../../projects/pig-command-compiler&quot;,
+  &quot;cwd&quot;: &quot;/home/bot&quot;,
+  &quot;agentDir&quot;: &quot;/home/bot/.pig/agent&quot;,
+  &quot;configuredResolvedFromCwd&quot;: &quot;/projects/pig-command-compiler&quot;,
+  &quot;configuredResolvedFromAgentDir&quot;: &quot;/home/bot/projects/pig-command-compiler&quot;,
+  &quot;existsFromCwd&quot;: false,
+  &quot;existsFromAgentDir&quot;: true,
+  &quot;currentConfiguredLoad&quot;: {
+    &quot;label&quot;: &quot;current settings package as Pig loader sees it&quot;,
+    &quot;configuredPaths&quot;: [
+      &quot;../../projects/pig-command-compiler&quot;
+    ],
+    &quot;extensions&quot;: [
+      {
+        &quot;path&quot;: &quot;/home/bot/.pig/agent/extensions/editable-dir-guard.ts&quot;,
+        &quot;resolvedPath&quot;: &quot;/home/bot/.pig/agent/extensions/editable-dir-guard.ts&quot;,
+        &quot;handlers&quot;: [
+          &quot;session_start&quot;,
+          &quot;before_agent_start&quot;,
+          &quot;tool_call&quot;
+        ],
+        &quot;commands&quot;: []
+      }
+    ],
+    &quot;errors&quot;: [
+      {
+        &quot;path&quot;: &quot;/projects/pig-command-compiler&quot;,
+        &quot;error&quot;: &quot;Failed to load extension: Cannot find module &#x27;/projects/pig-command-compiler&#x27;\nRequire stack:\n- /home/bot/pig-mono/packages/coding-agent/dist/core/extensions/loader.js&quot;
+      }
+    ]
+  },
+  &quot;absolutePathLoad&quot;: {
+    &quot;label&quot;: &quot;absolute path load&quot;,
+    &quot;configuredPaths&quot;: [
+      &quot;/home/bot/projects/pig-command-compiler&quot;
+    ],
+    &quot;extensions&quot;: [
+      {
+        &quot;path&quot;: &quot;/home/bot/.pig/agent/extensions/editable-dir-guard.ts&quot;,
+        &quot;resolvedPath&quot;: &quot;/home/bot/.pig/agent/extensions/editable-dir-guard.ts&quot;,
+        &quot;handlers&quot;: [
+          &quot;session_start&quot;,
+          &quot;before_agent_start&quot;,
+          &quot;tool_call&quot;
+        ],
+        &quot;commands&quot;: []
+      },
+      {
+        &quot;path&quot;: &quot;/home/bot/projects/pig-command-compiler/src/index.ts&quot;,
+        &quot;resolvedPath&quot;: &quot;/home/bot/projects/pig-command-compiler/src/index.ts&quot;,
+        &quot;handlers&quot;: [
+          &quot;input&quot;
+        ],
+        &quot;commands&quot;: [
+          &quot;compiler-route&quot;,
+          &quot;compiler-debug-info&quot;
+        ]
+      }
+    ],
+    &quot;errors&quot;: []
+  }
+}
+</pre>
+<h4>stderr</h4><pre></pre></section><section><h3>pig_runtime_facts <span class="ok">exit 0</span></h3>
+<p><b>cwd:</b> <code>/home/bot/projects/pig-command-compiler</code></p>
+<p><b>cmd:</b> <code>echo settings; cat /home/bot/.pig/agent/settings.json; echo; echo logs-dir; ls -la /home/bot/.pig/agent/logs 2&gt;&amp;1 || true; echo; echo recent-sessions; ls -lt /home/bot/.pig/agent/sessions/--home-bot--/*.jsonl | head -5; echo; latest=$(ls -t /home/bot/.pig/agent/sessions/--home-bot--/*.jsonl | head -1); echo latest=$latest; python3 - &lt;&lt;&quot;PY2&quot;
+import json, os, glob
+latest=sorted(glob.glob(&quot;/home/bot/.pig/agent/sessions/--home-bot--/*.jsonl&quot;), key=os.path.getmtime, reverse=True)[0]
+print(&quot;latest&quot;, latest)
+for i,line in enumerate(open(latest),1):
+    obj=json.loads(line)
+    if obj.get(&quot;type&quot;)==&quot;message&quot;:
+        msg=obj.get(&quot;message&quot;,{})
+        role=msg.get(&quot;role&quot;)
+        texts=[]
+        for c in msg.get(&quot;content&quot;,[]) or []:
+            if c.get(&quot;type&quot;)==&quot;text&quot;: texts.append(c.get(&quot;text&quot;,&quot;&quot;)[:160])
+            elif c.get(&quot;type&quot;)==&quot;toolCall&quot;: texts.append(&quot;TOOLCALL:&quot;+c.get(&quot;name&quot;,&quot;&quot;))
+        print(i, role, &quot; | &quot;.join(texts), msg.get(&quot;errorMessage&quot;, &quot;&quot;))
+    else:
+        print(i, obj.get(&quot;type&quot;), obj.get(&quot;timestamp&quot;, &quot;&quot;))
+PY2</code></p>
+<h4>stdout</h4><pre>settings
+{
+  &quot;lastChangelogVersion&quot;: &quot;0.70.6&quot;,
+  &quot;defaultProvider&quot;: &quot;local-gemma4-audio&quot;,
+  &quot;defaultModel&quot;: &quot;gemma-4-e2b-audio-local&quot;,
+  &quot;defaultThinkingLevel&quot;: &quot;off&quot;,
+  &quot;compaction&quot;: {
+    &quot;enabled&quot;: true,
+    &quot;reserveTokens&quot;: 4096
+  },
+  &quot;theme&quot;: &quot;dark&quot;,
+  &quot;packages&quot;: [
+    &quot;../../projects/pig-command-compiler&quot;,
+    &quot;../../projects/pi-voice-vad-gemma&quot;,
+    &quot;npm:pi-searxng&quot;
+  ]
+}
+
+logs-dir
+ls: cannot access &#x27;/home/bot/.pig/agent/logs&#x27;: No such file or directory
+
+recent-sessions
+-rw-rw-r-- 1 bot bot  109092 May 20 16:55 /home/bot/.pig/agent/sessions/--home-bot--/2026-05-20T21-54-32-538Z_019e4762-1bd9-75b6-8071-c602b3755a38.jsonl
+-rw-rw-r-- 1 bot bot    6763 May 20 16:51 /home/bot/.pig/agent/sessions/--home-bot--/2026-05-20T21-42-56-372Z_019e4757-7c73-720b-b0e2-8c2643686089.jsonl
+-rw-rw-r-- 1 bot bot   48586 May 20 14:25 /home/bot/.pig/agent/sessions/--home-bot--/2026-05-20T19-14-31-528Z_019e46cf-9be8-7255-8185-60d060a0b169.jsonl
+-rw-rw-r-- 1 bot bot   12856 May 20 14:06 /home/bot/.pig/agent/sessions/--home-bot--/2026-05-20T19-05-03-538Z_019e46c6-f131-76b8-abe9-5dbe78c37497.jsonl
+-rw-rw-r-- 1 bot bot 1004171 May 20 13:35 /home/bot/.pig/agent/sessions/--home-bot--/2026-05-20T18-35-37-040Z_019e46ab-fcd0-76aa-9172-e8935c998336.jsonl
+
+latest=/home/bot/.pig/agent/sessions/--home-bot--/2026-05-20T21-54-32-538Z_019e4762-1bd9-75b6-8071-c602b3755a38.jsonl
+latest /home/bot/.pig/agent/sessions/--home-bot--/2026-05-20T21-54-32-538Z_019e4762-1bd9-75b6-8071-c602b3755a38.jsonl
+1 session 2026-05-20T21:54:32.538Z
+2 model_change 2026-05-20T21:54:32.957Z
+3 thinking_level_change 2026-05-20T21:54:32.957Z
+4 user Hello, how are you? 
+5 assistant I am doing well, thank you for asking! As an AI assistant, I&#x27;m ready to help you with your coding tasks.
+
+How can I assist you today? 
+6 user Uh, can you tell me about the weather? 
+7 assistant I can certainly try to help you with the weather! To give you the weather information, I need to know **where** you would like the weather for.
+
+Please tell me  
+8 user Show me the weather for today. 
+9 assistant What city or location are you interested in? 
+10 user Take a screenshot. 
+11 assistant TOOLCALL:find 
+12 toolResult .cache/camoufox/addons/UBO/2x2.png
+.cache/camoufox/addons/UBO/32x32.png
+.cache/camoufox/addons/UBO/3x2.png
+.cache/camoufox/addons/UBO/ad.png
+.cache/camoufox/add 
+13 assistant  Operation aborted
+</pre>
+<h4>stderr</h4><pre></pre></section></section>
+<section><h2>Changed/source files captured</h2><h3>src/diagnostics/debugLog.ts</h3><pre>import { promises as fs } from &quot;node:fs&quot;;
+import os from &quot;node:os&quot;;
+import path from &quot;node:path&quot;;
+
+const DEFAULT_LOG_DIR = path.join(os.homedir(), &quot;.pig&quot;, &quot;agent&quot;, &quot;logs&quot;);
+const LOG_FILE = &quot;pig-command-compiler.jsonl&quot;;
+
+export interface DebugLogEvent {
+  event: string;
+  cwd?: string;
+  input?: string;
+  data?: unknown;
+  error?: unknown;
+}
+
+export function debugLogDir(): string {
+  return process.env.PIG_COMMAND_COMPILER_LOG_DIR || DEFAULT_LOG_DIR;
+}
+
+export function debugLogPath(): string {
+  return path.join(debugLogDir(), LOG_FILE);
+}
+
+function serializeError(error: unknown): unknown {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+  return error;
+}
+
+export async function appendDebugLog(event: DebugLogEvent): Promise&lt;void&gt; {
+  const record = {
+    ts: new Date().toISOString(),
+    pid: process.pid,
+    ...event,
+    error: event.error === undefined ? undefined : serializeError(event.error),
+  };
+  try {
+    await fs.mkdir(debugLogDir(), { recursive: true });
+    await fs.appendFile(debugLogPath(), `${JSON.stringify(record)}\n`, &quot;utf8&quot;);
+  } catch {
+    // Logging must never break command routing.
+  }
+}
+
+export function appendDebugLogSyncBestEffort(event: DebugLogEvent): void {
+  void appendDebugLog(event);
+}
+</pre><h3>src/diagnostics/commands.ts</h3><pre>import { compileInput } from &quot;../compiler/compiler.js&quot;;
+import { buildCompilerResources } from &quot;../runtime/resources.js&quot;;
+import { formatTrace } from &quot;./logs.js&quot;;
+import { appendDebugLog, debugLogPath } from &quot;./debugLog.js&quot;;
+
+export interface MinimalPiCommandAPI {
+  registerCommand(name: string, options: { description?: string; handler: (args: string, ctx: { cwd?: string; ui?: { notify?: (message: string, type?: string) =&gt; void } }) =&gt; unknown | Promise&lt;unknown&gt; }): void;
+}
+
+export function registerDiagnostics(pi: MinimalPiCommandAPI): void {
+  pi.registerCommand(&quot;compiler-route&quot;, {
+    description: &quot;Debug pig-command-compiler routing for input text&quot;,
+    handler: async (args, ctx) =&gt; {
+      const cwd = ctx.cwd ?? process.cwd();
+      try {
+        const resources = await buildCompilerResources(cwd, {
+          activeDisplay: process.env.DISPLAY ?? &quot;test-display&quot;,
+          defaultLocation: process.env.PIG_DEFAULT_LOCATION ?? &quot;Jim Falls, WI&quot;,
+          recentScreenshotPath: process.env.PIG_RECENT_SCREENSHOT,
+        });
+        const decision = await compileInput(args, resources);
+        const text = `${decision.mode}: ${decision.reason}\n${formatTrace(decision.trace)}\n\ndebug log: ${debugLogPath()}`;
+        await appendDebugLog({
+          event: &quot;compiler_route&quot;,
+          cwd,
+          input: args,
+          data: {
+            mode: decision.mode,
+            handled: decision.handled,
+            reason: decision.reason,
+            trace: decision.trace,
+          },
+        });
+        ctx.ui?.notify?.(text, decision.handled ? &quot;info&quot; : &quot;warn&quot;);
+        return text;
+      } catch (error) {
+        await appendDebugLog({ event: &quot;compiler_route_error&quot;, cwd, input: args, error });
+        const text = `pcc err: ${(error as Error).message}\ndebug log: ${debugLogPath()}`;
+        ctx.ui?.notify?.(text, &quot;error&quot;);
+        return text;
+      }
+    },
+  });
+
+  pi.registerCommand(&quot;compiler-debug-info&quot;, {
+    description: &quot;Show pig-command-compiler debug paths and runtime environment&quot;,
+    handler: async (_args, ctx) =&gt; {
+      const text = [
+        `debug log: ${debugLogPath()}`,
+        `pig sessions: ${process.env.HOME}/.pig/agent/sessions/`,
+        `cwd: ${ctx.cwd ?? process.cwd()}`,
+        `pid: ${process.pid}`,
+        `embeddings: ${process.env.PIG_COMMAND_COMPILER_EMBEDDINGS ?? &quot;enabled by default&quot;}`,
+        `embedding model: ${process.env.PIG_COMMAND_COMPILER_EMBEDDING_MODEL ?? &quot;Xenova/all-MiniLM-L6-v2&quot;}`,
+        `transformers cache: ${process.env.TRANSFORMERS_CACHE ?? `${process.env.HOME}/.cache/pig-command-compiler/transformers`}`,
+      ].join(&quot;\n&quot;);
+      await appendDebugLog({ event: &quot;compiler_debug_info&quot;, cwd: ctx.cwd ?? process.cwd(), data: { text } });
+      ctx.ui?.notify?.(text, &quot;info&quot;);
+      return text;
+    },
+  });
+}
+</pre><h3>src/index.ts</h3><pre>import { compileInput, shouldCompile } from &quot;./compiler/compiler.js&quot;;
+import { registerDiagnostics } from &quot;./diagnostics/commands.js&quot;;
+import { buildCompilerResources } from &quot;./runtime/resources.js&quot;;
+import { runDirectExec } from &quot;./runtime/directExec.js&quot;;
+import { buildResultMessage, buildSkillMessage } from &quot;./runtime/skillMessages.js&quot;;
+import { appendImagePath, type PigImageAttachment } from &quot;./runtime/images.js&quot;;
+import { appendDebugLog, debugLogPath } from &quot;./diagnostics/debugLog.js&quot;;
+
+interface MinimalExtensionAPI {
+  on(event: &quot;input&quot;, handler: (event: { text: string; images?: PigImageAttachment[]; source?: string }, ctx: { cwd?: string }) =&gt; unknown | Promise&lt;unknown&gt;): void;
+  on(event: string, handler: (...args: unknown[]) =&gt; unknown): void;
+  registerCommand?: (name: string, options: { description?: string; handler: (args: string, ctx: unknown) =&gt; unknown }) =&gt; void;
+}
+
+export default function pigCommandCompiler(pi: MinimalExtensionAPI) {
+  pi.on(&quot;input&quot;, async (event, ctx) =&gt; {
+    const text = event.text.trim();
+    if (event.source === &quot;extension&quot; || !shouldCompile(text)) {
+      return { action: &quot;continue&quot; as const };
+    }
+
+    try {
+      const cwd = ctx.cwd ?? process.cwd();
+      const resources = await buildCompilerResources(cwd);
+      const result = await compileInput(text, resources);
+      await appendDebugLog({
+        event: &quot;input_decision&quot;,
+        cwd,
+        input: text,
+        data: {
+          mode: result.mode,
+          handled: result.handled,
+          reason: result.reason,
+          selected: result.trace.selected,
+          steps: result.trace.steps,
+        },
+      });
+
+      if (result.mode === &quot;direct_exec&quot; &amp;&amp; result.directExec) {
+        const output = await runDirectExec(result.directExec);
+        await appendDebugLog({ event: &quot;direct_exec_result&quot;, cwd, input: text, data: { action: result.directExec.action.id, output } });
+        if (output.code !== 0) return { action: &quot;continue&quot; as const };
+        const shouldAttachImage = Boolean(
+          output.imagePath &amp;&amp;
+            result.command?.intent &amp;&amp;
+            result.directExec.action.attachImageWhenIntent === result.command.intent,
+        );
+        return {
+          action: &quot;transform&quot; as const,
+          text: shouldAttachImage
+            ? `${buildResultMessage(result, output)}\n\nOriginal request: ${text}\nAnswer the original request using the attached image. Do not invent details that are not visible.`
+            : buildResultMessage(result, output),
+          images: await appendImagePath(event.images, shouldAttachImage ? output.imagePath : undefined),
+        };
+      }
+
+      if (result.mode === &quot;pig_skill&quot; &amp;&amp; result.skill) {
+        return {
+          action: &quot;transform&quot; as const,
+          text: buildSkillMessage(result.skill, text),
+          images: event.images,
+        };
+      }
+
+      return { action: &quot;continue&quot; as const };
+    } catch (error) {
+      await appendDebugLog({ event: &quot;input_error&quot;, cwd: ctx.cwd ?? process.cwd(), input: text, error });
+      console.warn(`[pig-command-compiler] input error; see ${debugLogPath()}: ${(error as Error).message}`);
+      return { action: &quot;continue&quot; as const };
+    }
+  });
+
+  if (pi.registerCommand) registerDiagnostics(pi as Parameters&lt;typeof registerDiagnostics&gt;[0]);
+}
+
+export { compileInput, shouldCompile } from &quot;./compiler/compiler.js&quot;;
+export type { CompilerDecision, CompilerResources } from &quot;./compiler/compiler.js&quot;;
+export type { CommandIR, ChatIR, AnyIR } from &quot;./compiler/ir.js&quot;;
+</pre><h3>src/compiler/transformersEmbeddingExtractor.ts</h3><pre>import os from &quot;node:os&quot;;
+import path from &quot;node:path&quot;;
+import type { CommandExtractor, CommandIRCandidate } from &quot;./extractors.js&quot;;
+import { buildMetadataDocs } from &quot;../metadata/loadSkillMetadata.js&quot;;
+import type { MetadataDoc } from &quot;../metadata/schema.js&quot;;
+import { appendDebugLogSyncBestEffort } from &quot;../diagnostics/debugLog.js&quot;;
+
+const DEFAULT_MODEL = &quot;Xenova/all-MiniLM-L6-v2&quot;;
+const DEFAULT_THRESHOLD = 0.58;
+const DEFAULT_TOP_K = 5;
+
+interface EmbeddedMetadataDoc {
+  doc: MetadataDoc;
+  embedding: Float32Array;
+}
+
+interface EmbeddingCache {
+  signature: string;
+  model: string;
+  docs: EmbeddedMetadataDoc[];
+}
+
+type FeatureExtractionPipeline = (text: string, options: { pooling: &quot;mean&quot;; normalize: boolean }) =&gt; Promise&lt;{ data: Float32Array | number[] }&gt;;
+
+let extractorPromise: Promise&lt;FeatureExtractionPipeline&gt; | undefined;
+let metadataCache: EmbeddingCache | undefined;
+let warned = false;
+
+function embeddingsEnabled(): boolean {
+  return process.env.PIG_COMMAND_COMPILER_EMBEDDINGS !== &quot;0&quot; &amp;&amp; process.env.PIG_COMMAND_COMPILER_EMBEDDINGS !== &quot;false&quot;;
+}
+
+function embeddingModel(): string {
+  return process.env.PIG_COMMAND_COMPILER_EMBEDDING_MODEL || DEFAULT_MODEL;
+}
+
+function embeddingThreshold(): number {
+  const raw = Number(process.env.PIG_COMMAND_COMPILER_EMBEDDING_THRESHOLD);
+  return Number.isFinite(raw) &amp;&amp; raw &gt; 0 ? raw : DEFAULT_THRESHOLD;
+}
+
+function embeddingTopK(): number {
+  const raw = Number(process.env.PIG_COMMAND_COMPILER_EMBEDDING_TOP_K);
+  return Number.isFinite(raw) &amp;&amp; raw &gt; 0 ? Math.floor(raw) : DEFAULT_TOP_K;
+}
+
+async function getFeatureExtractor(model: string): Promise&lt;FeatureExtractionPipeline&gt; {
+  if (!extractorPromise) {
+    extractorPromise = (async () =&gt; {
+      const transformers = await import(&quot;@huggingface/transformers&quot;);
+      transformers.env.cacheDir = process.env.TRANSFORMERS_CACHE || path.join(os.homedir(), &quot;.cache&quot;, &quot;pig-command-compiler&quot;, &quot;transformers&quot;);
+      const pipe = await transformers.pipeline(&quot;feature-extraction&quot;, model);
+      return pipe as unknown as FeatureExtractionPipeline;
+    })();
+  }
+  return extractorPromise;
+}
+
+async function embedText(text: string, model: string): Promise&lt;Float32Array&gt; {
+  const extractor = await getFeatureExtractor(model);
+  const output = await extractor(text, { pooling: &quot;mean&quot;, normalize: true });
+  return output.data instanceof Float32Array ? output.data : Float32Array.from(output.data);
+}
+
+function catalogSignature(docs: MetadataDoc[]): string {
+  return JSON.stringify(docs.map((doc) =&gt; [doc.id, doc.text, doc.ir]));
+}
+
+async function getEmbeddedMetadataDocs(resourcesCatalog: Parameters&lt;typeof buildMetadataDocs&gt;[0], model: string): Promise&lt;EmbeddedMetadataDoc[]&gt; {
+  const docs = buildMetadataDocs(resourcesCatalog);
+  const signature = catalogSignature(docs);
+  if (metadataCache?.signature === signature &amp;&amp; metadataCache.model === model) return metadataCache.docs;
+
+  const embedded = await Promise.all(docs.map(async (doc) =&gt; ({
+    doc,
+    embedding: await embedText(doc.text, model),
+  })));
+  metadataCache = { signature, model, docs: embedded };
+  return embedded;
+}
+
+function dot(a: Float32Array, b: Float32Array): number {
+  const length = Math.min(a.length, b.length);
+  let sum = 0;
+  for (let i = 0; i &lt; length; i++) sum += a[i] * b[i];
+  return sum;
+}
+
+function hasNegative(text: string, negatives: string[]): boolean {
+  const lower = text.toLowerCase();
+  return negatives.some((negative) =&gt; lower.includes(negative.toLowerCase()));
+}
+
+export const transformersEmbeddingExtractor: CommandExtractor = {
+  name: &quot;transformers-embedding&quot;,
+
+  async extract(text, resources): Promise&lt;CommandIRCandidate[]&gt; {
+    if (!embeddingsEnabled()) return [];
+
+    try {
+      const model = embeddingModel();
+      const queryEmbedding = await embedText(text, model);
+      const docs = await getEmbeddedMetadataDocs(resources.catalog, model);
+      const threshold = embeddingThreshold();
+
+      return docs
+        .filter(({ doc }) =&gt; !hasNegative(text, doc.negativeExamples))
+        .map(({ doc, embedding }) =&gt; ({ doc, score: dot(queryEmbedding, embedding) }))
+        .filter(({ score }) =&gt; score &gt;= threshold)
+        .sort((a, b) =&gt; b.score - a.score)
+        .slice(0, embeddingTopK())
+        .map(({ doc, score }) =&gt; ({
+          ir: { ...doc.ir, kind: &quot;command&quot;, confidence: Math.min(0.87, Math.max(0.6, score)) },
+          extractor: &quot;transformers-embedding&quot;,
+          matchedTerms: doc.terms.slice(0, 5),
+          reason: `semantic match ${doc.id} score=${score.toFixed(3)}`,
+          evidence: { kind: &quot;semantic&quot;, score, tokenMatches: text.toLowerCase().match(/[a-z0-9&#x27;]+/g) ?? [] },
+        }));
+    } catch (error) {
+      appendDebugLogSyncBestEffort({
+        event: &quot;transformers_embedding_extractor_error&quot;,
+        input: text,
+        data: {
+          model: embeddingModel(),
+          cacheDir: process.env.TRANSFORMERS_CACHE || path.join(os.homedir(), &quot;.cache&quot;, &quot;pig-command-compiler&quot;, &quot;transformers&quot;),
+        },
+        error,
+      });
+      if (!warned) {
+        warned = true;
+        console.warn(`[pig-command-compiler] transformers embedding extractor disabled after error: ${(error as Error).message}`);
+      }
+      return [];
+    }
+  },
+};
+</pre><h3>tests/diagnostics-smoke.mjs</h3><pre>import assert from &quot;node:assert/strict&quot;;
+import { mkdtemp, readFile, rm } from &quot;node:fs/promises&quot;;
+import os from &quot;node:os&quot;;
+import path from &quot;node:path&quot;;
+import pigCommandCompiler from &quot;../dist/src/index.js&quot;;
+
+process.env.PIG_COMMAND_COMPILER_EMBEDDINGS = &quot;0&quot;;
+
+const logDir = await mkdtemp(path.join(os.tmpdir(), &quot;pcc-diagnostics-&quot;));
+process.env.PIG_COMMAND_COMPILER_LOG_DIR = logDir;
+
+const handlers = new Map();
+const commands = new Map();
+const notifications = [];
+
+const fakePi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  registerCommand(name, options) {
+    commands.set(name, options);
+  },
+};
+
+pigCommandCompiler(fakePi);
+
+assert.ok(handlers.has(&quot;input&quot;), &quot;extension should register an input handler&quot;);
+assert.ok(commands.has(&quot;compiler-route&quot;), &quot;extension should register /compiler-route&quot;);
+assert.ok(commands.has(&quot;compiler-debug-info&quot;), &quot;extension should register /compiler-debug-info&quot;);
+
+const ctx = {
+  cwd: process.cwd(),
+  ui: {
+    notify(message, type) {
+      notifications.push({ message, type });
+    },
+  },
+};
+
+const debugInfo = await commands.get(&quot;compiler-debug-info&quot;).handler(&quot;&quot;, ctx);
+assert.match(debugInfo, /debug log:/);
+assert.match(debugInfo, /pig sessions:/);
+
+const route = await commands.get(&quot;compiler-route&quot;).handler(&quot;weather today&quot;, ctx);
+assert.match(route, /debug log:/);
+assert.match(route, /input: weather today/);
+
+const inputResult = await handlers.get(&quot;input&quot;)({ text: &quot;weather today&quot;, images: [] }, { cwd: process.cwd() });
+assert.ok([&quot;transform&quot;, &quot;continue&quot;].includes(inputResult.action), &quot;input handler should return a Pig action&quot;);
+
+const logPath = path.join(logDir, &quot;pig-command-compiler.jsonl&quot;);
+const lines = (await readFile(logPath, &quot;utf8&quot;)).trim().split(&quot;\n&quot;).map((line) =&gt; JSON.parse(line));
+assert.ok(lines.some((line) =&gt; line.event === &quot;compiler_debug_info&quot;), &quot;debug info command should append a log event&quot;);
+assert.ok(lines.some((line) =&gt; line.event === &quot;compiler_route&quot;), &quot;compiler route command should append a log event&quot;);
+assert.ok(lines.some((line) =&gt; line.event === &quot;input_decision&quot;), &quot;input handler should append a decision log event&quot;);
+assert.ok(lines.every((line) =&gt; line.pid &amp;&amp; line.ts), &quot;all log entries should include pid and timestamp&quot;);
+
+await rm(logDir, { recursive: true, force: true });
+console.log(&quot;diagnostics smoke test passed&quot;);
+</pre><h3>docs/debugging.md</h3><pre># Debugging pig-command-compiler
+
+This repo now has one canonical persistent debug log for compiler behavior:
+
+```text
+~/.pig/agent/logs/pig-command-compiler.jsonl
+```
+
+Override it with:
+
+```bash
+export PIG_COMMAND_COMPILER_LOG_DIR=/path/to/log-dir
+```
+
+## What is logged
+
+The JSONL debug log records:
+
+- `/compiler-route &lt;text&gt;` decisions and errors
+- normal Pig input routing decisions
+- direct-exec results
+- Transformers embedding extractor errors, including model/cache settings
+
+The log is best-effort and must never block routing.
+
+## Useful commands
+
+Inside Pig:
+
+```text
+/compiler-debug-info
+/compiler-route whats the weather today
+```
+
+`/compiler-debug-info` prints the debug log path, session root, cwd, pid, and embedding-related environment.
+
+Tail the compiler log from a shell:
+
+```bash
+tail -f ~/.pig/agent/logs/pig-command-compiler.jsonl
+```
+
+Pretty-print recent events:
+
+```bash
+tail -n 20 ~/.pig/agent/logs/pig-command-compiler.jsonl | jq .
+```
+
+Find embedding failures:
+
+```bash
+rg &#x27;transformers_embedding_extractor_error|compiler_route_error|input_error&#x27; ~/.pig/agent/logs/pig-command-compiler.jsonl
+```
+
+## Session history vs runtime debug logs
+
+Pig conversation/session history is stored under:
+
+```text
+~/.pig/agent/sessions/
+```
+
+Those JSONL files are for conversation state. They may not contain stderr/stdout warnings printed by extensions or the TUI. For pig-command-compiler runtime debugging, use the canonical debug log above.
+
+## Embedding runtime settings
+
+Defaults:
+
+```bash
+PIG_COMMAND_COMPILER_EMBEDDINGS=1
+PIG_COMMAND_COMPILER_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2
+PIG_COMMAND_COMPILER_EMBEDDING_THRESHOLD=0.58
+PIG_COMMAND_COMPILER_EMBEDDING_TOP_K=5
+TRANSFORMERS_CACHE=$HOME/.cache/pig-command-compiler/transformers
+```
+
+Disable embeddings for fast/offline checks:
+
+```bash
+PIG_COMMAND_COMPILER_EMBEDDINGS=0
+```
+
+Important: `npm run test:embedding` proves the repo test environment can load embeddings. Pig may still fail if its runtime environment, cwd, module resolution, or cache permissions differ. Check `/compiler-debug-info` and the debug log to compare.
+</pre><h3>README.md</h3><pre># Pig Command Compiler
+
+A Pig/Pi extension that compiles fuzzy user input into typed, validated, deterministic Pig commands.
+
+Pipeline:
+
+```text
+fuzzy input → extractor stack → CommandIR → typecheck → resolve → lower → preconditions → execute/transform or continue
+```
+
+The compiler is conservative: uncertain, invalid, unsafe, or missing-context inputs fall through to normal Pig behavior.
+
+## Current scaffold
+
+Implemented:
+
+- Pi extension entrypoint at `src/index.ts`
+- `resources_discover` for Pig skill roots
+- `input` interception with safe fallthrough
+- typed `CommandIR`
+- rules extractor
+- lexical metadata extractor over `/home/bot/.pig/agent/skills/*/{routing,compiler,direct-exec}.json`
+- Transformers.js semantic embedding extractor with lazy model load and metadata embedding cache
+- typecheck, resolve, lower, preconditions, safety checks
+- direct execution runner for approved skill scripts
+- `/compiler-route &lt;text&gt;` diagnostics command
+- persistent JSONL debug log at `~/.pig/agent/logs/pig-command-compiler.jsonl`
+- smoke tests
+
+Initial target commands:
+
+- `take screenshot`
+- `show last screenshot`
+- `weather today`
+
+## Skill metadata
+
+This repo reads existing Pig skills from:
+
+```text
+/home/bot/.pig/agent/skills
+```
+
+It also checks a project-local `skills/` directory if one is added later.
+
+## Development
+
+```bash
+npm install
+npm test
+npm run test:embedding
+```
+
+`npm test` disables embeddings to keep the offline smoke test fast. `npm run test:embedding` loads the configured Transformers.js model and verifies semantic routing.
+
+Embedding configuration:
+
+```bash
+# defaults shown
+export PIG_COMMAND_COMPILER_EMBEDDINGS=1
+export PIG_COMMAND_COMPILER_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2
+export PIG_COMMAND_COMPILER_EMBEDDING_THRESHOLD=0.58
+export PIG_COMMAND_COMPILER_EMBEDDING_TOP_K=5
+export TRANSFORMERS_CACHE=$HOME/.cache/pig-command-compiler/transformers
+```
+
+Pi can also load the TypeScript extension directly via the package `pi.extensions` entry or with `pi -e ./src/index.ts`.
+
+## Debugging
+
+See [`docs/debugging.md`](docs/debugging.md).
+
+Quick commands:
+
+```text
+/compiler-debug-info
+/compiler-route &lt;text&gt;
+```
+
+Canonical compiler runtime log:
+
+```text
+~/.pig/agent/logs/pig-command-compiler.jsonl
+```
+
+Pig conversation/session history is under `~/.pig/agent/sessions/`, but TUI stderr/stdout may not be persisted there.
+
+## Safety policy
+
+Direct execution is allowed only when all are true:
+
+- action has `directExec: true`
+- no confirmation is required
+- safety class is one of `read_only_local`, `read_only_network`, `local_capture`
+- script path is relative
+- script resolves inside the owning skill&#x27;s `scripts/` directory
+- required context is present
+
+Failures return `continue` instead of improvising.
+</pre><h3>package.json</h3><pre>{
+  &quot;name&quot;: &quot;pig-command-compiler&quot;,
+  &quot;version&quot;: &quot;0.1.0&quot;,
+  &quot;type&quot;: &quot;module&quot;,
+  &quot;description&quot;: &quot;Pig extension for compiling fuzzy user input into typed, validated, deterministic commands&quot;,
+  &quot;keywords&quot;: [
+    &quot;pig&quot;,
+    &quot;pi-extension&quot;,
+    &quot;command-compiler&quot;,
+    &quot;command-ir&quot;,
+    &quot;extractors&quot;,
+    &quot;skills&quot;,
+    &quot;deterministic-actions&quot;
+  ],
+  &quot;license&quot;: &quot;MIT&quot;,
+  &quot;pi&quot;: {
+    &quot;extensions&quot;: [
+      &quot;./src/index.ts&quot;
+    ]
+  },
+  &quot;peerDependencies&quot;: {
+    &quot;@mariozechner/pi-ai&quot;: &quot;*&quot;,
+    &quot;@mariozechner/pi-coding-agent&quot;: &quot;*&quot;
+  },
+  &quot;scripts&quot;: {
+    &quot;build&quot;: &quot;tsc&quot;,
+    &quot;check&quot;: &quot;tsc --noEmit&quot;,
+    &quot;test&quot;: &quot;npm run build &amp;&amp; PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/compiler-smoke.mjs &amp;&amp; PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/diagnostics-smoke.mjs&quot;,
+    &quot;test:diagnostics&quot;: &quot;npm run build &amp;&amp; PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/diagnostics-smoke.mjs&quot;,
+    &quot;test:embedding&quot;: &quot;npm run build &amp;&amp; node tests/embedding-smoke.mjs&quot;
+  },
+  &quot;dependencies&quot;: {
+    &quot;@huggingface/transformers&quot;: &quot;latest&quot;
+  },
+  &quot;devDependencies&quot;: {
+    &quot;@types/node&quot;: &quot;^22.0.0&quot;,
+    &quot;typescript&quot;: &quot;^5.7.0&quot;
+  },
+  &quot;exports&quot;: {
+    &quot;.&quot;: &quot;./src/index.ts&quot;
+  },
+  &quot;types&quot;: &quot;./src/index.ts&quot;
+}
+</pre></section>
+<section><h2>Artifact files</h2><p>Machine-readable command captures are in <code>/home/bot/projects/pig-command-compiler/proof-artifacts-20260520-170039</code>.</p><ul><li><code>diagnostics-log</code></li><li><code>diagnostics-proof-run.mjs</code></li><li><code>diagnostics_proof_run.json</code></li><li><code>extension_registers_dist.json</code></li><li><code>git_diff.json</code></li><li><code>git_status.json</code></li><li><code>npm_check.json</code></li><li><code>npm_test.json</code></li><li><code>npm_test_embedding.json</code></li><li><code>pig-loader-proof.mjs</code></li><li><code>pig_loader_proof.json</code></li><li><code>pig_runtime_facts.json</code></li><li><code>pwd_date.json</code></li></ul></section>
+</body></html>

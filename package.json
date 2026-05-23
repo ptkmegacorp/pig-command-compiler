@@ -25,7 +25,8 @@
   "scripts": {
     "build": "tsc",
     "check": "tsc --noEmit",
-    "test": "npm run build && PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/compiler-smoke.mjs",
+    "test": "npm run build && PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/compiler-smoke.mjs && PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/diagnostics-smoke.mjs",
+    "test:diagnostics": "npm run build && PIG_COMMAND_COMPILER_EMBEDDINGS=0 node tests/diagnostics-smoke.mjs",
     "test:embedding": "npm run build && node tests/embedding-smoke.mjs"
   },
   "dependencies": {

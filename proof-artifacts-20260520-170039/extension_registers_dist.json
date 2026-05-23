@@ -1,0 +1,8 @@
+{
+  "name": "extension_registers_dist",
+  "cmd": "node -e \"import('./dist/src/index.js').then(m=>{let events=[];let cmds=[];m.default({on:(e,h)=>events.push(e),registerCommand:(n,o)=>cmds.push(n)}); console.log(JSON.stringify({events,cmds}, null, 2))}).catch(e=>{console.error(e); process.exit(1)})\"",
+  "cwd": "/home/bot/projects/pig-command-compiler",
+  "returncode": 0,
+  "stdout": "{\n  \"events\": [\n    \"input\"\n  ],\n  \"cmds\": [\n    \"compiler-route\",\n    \"compiler-debug-info\"\n  ]\n}\n",
+  "stderr": ""
+}

@@ -1,0 +1,8 @@
+{
+  "name": "pwd_date",
+  "cmd": "pwd; date -Is; node -v; npm -v",
+  "cwd": "/home/bot/projects/pig-command-compiler",
+  "returncode": 0,
+  "stdout": "/home/bot/projects/pig-command-compiler\n2026-05-20T17:08:43-05:00\nv22.22.2\n10.9.7\n",
+  "stderr": ""
+}

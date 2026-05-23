@@ -2,7 +2,12 @@ import type { CompilerDecision } from "../compiler/compiler.js";
 import type { DirectExecOutput } from "./directExec.js";
 
 export function buildSkillMessage(skill: { name: string }, originalText: string): string {
-  return `/skill:${skill.name}\n\n${originalText}`;
+  return `/skill:${skill.name} ${originalText}`;
+}
+
+export function buildDirectExecSkillMessage(result: CompilerDecision, originalText: string): string {
+  const skillName = result.directExec?.action.skillName;
+  return skillName ? buildSkillMessage({ name: skillName }, originalText) : originalText;
 }
 
 export function buildResultMessage(result: CompilerDecision, output: DirectExecOutput): string {

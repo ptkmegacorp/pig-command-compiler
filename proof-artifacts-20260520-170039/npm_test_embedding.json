@@ -1,0 +1,8 @@
+{
+  "name": "npm_test_embedding",
+  "cmd": "npm run test:embedding",
+  "cwd": "/home/bot/projects/pig-command-compiler",
+  "returncode": 0,
+  "stdout": "\n> pig-command-compiler@0.1.0 test:embedding\n> npm run build && node tests/embedding-smoke.mjs\n\n\n> pig-command-compiler@0.1.0 build\n> tsc\n\nembedding smoke test passed semantic match take-screenshot:visual_inspect score=0.587\n",
+  "stderr": ""
+}
